@@ -8,6 +8,11 @@ const TeamsService = require('./services/TeamsService');
 const DiscordService = require('./services/DiscordService');
 const StateManager = require('./services/StateManager');
 
+// Import routes
+const configRouter = require('./routes/config');
+const healthRouter = require('./routes/health');
+const logsRouter = require('./routes/logs');
+
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -25,9 +30,9 @@ app.set('discordService', discordService);
 app.set('stateManager', stateManager);
 
 // Routes
-app.use('/api/config', require('./routes/config'));
-app.use('/api/health', require('./routes/health'));
-app.use('/api/logs', require('./routes/logs'));
+app.use('/api/config', configRouter);  // Use the imported router
+app.use('/api/health', healthRouter);  // Use the imported router
+app.use('/api/logs', logsRouter);      // Use the imported router
 
 // Start polling
 const pollInterval = parseInt(process.env.POLLING_INTERVAL) || 5000;
