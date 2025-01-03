@@ -9,6 +9,7 @@ const LIFXService = require('./services/LIFXService');
 const TeamsService = require('./services/TeamsService');
 const DiscordService = require('./services/DiscordService');
 const StateManager = require('./services/StateManager');
+const servicesRouter = require('./routes/services');
 
 // Import routes
 const configRouter = require('./routes/config');
@@ -37,6 +38,7 @@ app.set('stateManager', stateManager);
 app.use('/api/config', configRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/logs', logsRouter);
+app.use('/api/services', servicesRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

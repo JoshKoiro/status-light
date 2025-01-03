@@ -7,33 +7,31 @@ class StateManager {
         this.logger = logger;
         this.currentState = null;
         this.priorities = (process.env.SERVICE_PRIORITY || 'teams,discord').split(',');
+        this.logger.info('StateManager initialized with priorities:', this.priorities);
     }
 
     async updateState() {
         try {
-            this.logger.debug('Starting state update cycle...');
-            
             const teamsStatus = await this.teams.getStatus();
             const discordStatus = await this.discord.getStreamingStatus();
-
-            this.logger.debug('Raw status values: ' + JSON.stringify({
+            
+            // Log detailed state to file only
+            this.logger.debug('Service status update', {
                 teams: teamsStatus,
                 discord: discordStatus
-            }, null, 2));
+            });
             
             const newState = this.determineState(teamsStatus, discordStatus);
 
             if (this.shouldUpdateLight(newState)) {
-                this.logger.debug('Light update needed. New state: ' + JSON.stringify(newState, null, 2));
                 const success = await this.lifx.setState(newState.color);
                 if (success) {
                     this.currentState = newState;
-                    this.logger.info(`State updated successfully to: ${JSON.stringify(newState, null, 2)}`);
+                    // Log state changes to console
+                    this.logger.info(`Light state updated to ${newState.color} (${newState.service})`);
                 } else {
                     this.logger.warn('Failed to update light state');
                 }
-            } else {
-                this.logger.debug('No light update needed. Current state matches new state.');
             }
 
             return this.currentState;
@@ -50,29 +48,25 @@ class StateManager {
             discord: this.getDiscordState(discordStatus)
         };
 
-        this.logger.debug('Service states: ' + JSON.stringify(states, null, 2));
+        // Log detailed state to file only
+        this.logger.debug('Service states', states);
 
         // Check priority order for any active state
         for (const service of this.priorities) {
             if (states[service].isOn) {
-                const finalState = {
+                return {
                     service,
                     color: states[service].color,
                     timestamp: new Date()
                 };
-                this.logger.debug(`Active state found for ${service}: ` + JSON.stringify(finalState, null, 2));
-                return finalState;
             }
         }
 
-        // Default to off if no services are active
-        const defaultState = { 
+        return { 
             service: 'none', 
             color: 'off', 
             timestamp: new Date() 
         };
-        this.logger.debug('No active states found, using default: ' + JSON.stringify(defaultState, null, 2));
-        return defaultState;
     }
 
     getTeamsState(teamsStatus) {
@@ -104,23 +98,12 @@ class StateManager {
     }
 
     shouldUpdateLight(newState) {
-        if (!this.currentState) {
-            this.logger.debug('No current state, update needed');
-            return true;
-        }
+        if (!this.currentState) return true;
         
-        const shouldUpdate = (
+        return (
             this.currentState.color !== newState.color || 
             this.currentState.service !== newState.service
         );
-
-        this.logger.debug('State comparison: ' + JSON.stringify({
-            current: this.currentState,
-            new: newState,
-            needsUpdate: shouldUpdate
-        }, null, 2));
-
-        return shouldUpdate;
     }
 
     getCurrentState() {

@@ -2,46 +2,45 @@
 const winston = require('winston');
 const path = require('path');
 
-// Custom format for better object logging
-const customFormat = winston.format.printf(({ level, message, timestamp }) => {
-    // If message is an object, stringify it
-    const formattedMessage = typeof message === 'object' 
-        ? JSON.stringify(message, null, 2)
-        : message;
-        
-    return `${timestamp} ${level}: ${formattedMessage}`;
-});
+// Custom format for console output
+const consoleFormat = winston.format.combine(
+    winston.format.colorize(),
+    winston.format.timestamp(),
+    winston.format.printf(({ level, message, timestamp }) => {
+        // Only format objects for file logging, keep console logging simple
+        const msg = typeof message === 'object' ? '[Object details logged to file]' : message;
+        return `${timestamp} ${level}: ${msg}`;
+    })
+);
+
+// Custom format for file output
+const fileFormat = winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+);
 
 const logger = winston.createLogger({
-    level: 'debug',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        customFormat
-    ),
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    format: fileFormat,
     transports: [
+        // Console transport with minimal logging
         new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.timestamp(),
-                customFormat
-            )
+            format: consoleFormat,
+            level: 'info'  // Only show info and above in console
         }),
+        // File transport with detailed logging
         new winston.transports.File({
             filename: path.join('logs', 'error.log'),
-            level: 'error',
-            format: winston.format.combine(
-                winston.format.timestamp(),
-                customFormat
-            )
+            level: 'error'
         }),
         new winston.transports.File({
-            filename: path.join('logs', 'combined.log'),
-            format: winston.format.combine(
-                winston.format.timestamp(),
-                customFormat
-            )
+            filename: path.join('logs', 'detailed.log'),
+            level: 'debug'  // Capture all logs in file
         })
     ]
 });
+
+// Add timestamps to console output
+logger.info('Logger initialized');
 
 module.exports = logger;
