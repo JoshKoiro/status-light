@@ -1,6 +1,6 @@
 # Status Light Controller
 
-A microservice that controls a LIFX light based on your Microsoft Teams presence and Discord voice channel activity. The light color changes to indicate your current status across these platforms, helping others know when you're in meetings, sharing your camera, or streaming.
+A small containerized application that controls a LIFX light based on your Microsoft Teams presence and Discord voice channel activity. The light color changes to indicate your current status across these platforms, helping others know when you're in meetings, sharing your camera, or streaming.
 
 ## Features
 
