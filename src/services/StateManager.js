@@ -11,19 +11,29 @@ class StateManager {
 
     async updateState() {
         try {
-            // Get status from all services, even if not configured
+            this.logger.debug('Starting state update cycle...');
+            
             const teamsStatus = await this.teams.getStatus();
             const discordStatus = await this.discord.getStreamingStatus();
 
+            this.logger.debug('Raw status values: ' + JSON.stringify({
+                teams: teamsStatus,
+                discord: discordStatus
+            }, null, 2));
+            
             const newState = this.determineState(teamsStatus, discordStatus);
 
-            // Only update light if the state has changed and we have a configured LIFX service
             if (this.shouldUpdateLight(newState)) {
+                this.logger.debug('Light update needed. New state: ' + JSON.stringify(newState, null, 2));
                 const success = await this.lifx.setState(newState.color);
                 if (success) {
                     this.currentState = newState;
-                    this.logger.info(`State updated to: ${JSON.stringify(newState)}`);
+                    this.logger.info(`State updated successfully to: ${JSON.stringify(newState, null, 2)}`);
+                } else {
+                    this.logger.warn('Failed to update light state');
                 }
+            } else {
+                this.logger.debug('No light update needed. Current state matches new state.');
             }
 
             return this.currentState;
@@ -36,44 +46,81 @@ class StateManager {
 
     determineState(teamsStatus, discordStatus) {
         const states = {
-            teams: {
-                active: teamsStatus.availability !== 'Offline' && teamsStatus.availability !== 'NotConfigured',
-                color: process.env[`TEAMS_${teamsStatus.availability.toUpperCase()}`] || 'off'
-            },
-            discord: {
-                active: discordStatus.streaming,
-                color: discordStatus.streaming ? 
-                    (process.env.DISCORD_STREAMING || 'blue') : 
-                    (process.env.DISCORD_NOT_STREAMING || 'off')
-            }
+            teams: this.getTeamsState(teamsStatus),
+            discord: this.getDiscordState(discordStatus)
         };
 
-        // Use priority order to determine final state
+        this.logger.debug('Service states: ' + JSON.stringify(states, null, 2));
+
+        // Check priority order for any active state
         for (const service of this.priorities) {
-            if (states[service].active) {
-                return {
+            if (states[service].isOn) {
+                const finalState = {
                     service,
                     color: states[service].color,
                     timestamp: new Date()
                 };
+                this.logger.debug(`Active state found for ${service}: ` + JSON.stringify(finalState, null, 2));
+                return finalState;
             }
         }
 
-        // Default state if no service is active
-        return { 
+        // Default to off if no services are active
+        const defaultState = { 
             service: 'none', 
             color: 'off', 
             timestamp: new Date() 
         };
+        this.logger.debug('No active states found, using default: ' + JSON.stringify(defaultState, null, 2));
+        return defaultState;
+    }
+
+    getTeamsState(teamsStatus) {
+        const color = process.env[`TEAMS_${teamsStatus.availability.toUpperCase()}`];
+        return {
+            isOn: !!color && color !== 'off',
+            color: color || 'off',
+            status: teamsStatus.availability
+        };
+    }
+
+    getDiscordState(discordStatus) {
+        let color = 'off';
+        let isOn = false;
+
+        if (discordStatus.activityType === 'camera' && process.env.DISCORD_CAMERA_ON) {
+            color = process.env.DISCORD_CAMERA_ON;
+            isOn = true;
+        } else if (['screen_share', 'streaming'].includes(discordStatus.activityType) && process.env.DISCORD_STREAMING) {
+            color = process.env.DISCORD_STREAMING;
+            isOn = true;
+        }
+
+        return {
+            isOn,
+            color,
+            activityType: discordStatus.activityType
+        };
     }
 
     shouldUpdateLight(newState) {
-        if (!this.currentState) return true;
+        if (!this.currentState) {
+            this.logger.debug('No current state, update needed');
+            return true;
+        }
         
-        return (
+        const shouldUpdate = (
             this.currentState.color !== newState.color || 
             this.currentState.service !== newState.service
         );
+
+        this.logger.debug('State comparison: ' + JSON.stringify({
+            current: this.currentState,
+            new: newState,
+            needsUpdate: shouldUpdate
+        }, null, 2));
+
+        return shouldUpdate;
     }
 
     getCurrentState() {
