@@ -151,7 +151,12 @@ class DiscordService {
                 internalConfigured: this.isConfigured,
                 clientReady: this.client?.isReady()
             }, null, 2));
-            const status = { streaming: false, timestamp: new Date() };
+            const status = { 
+                streaming: false, 
+                activityType: null,
+                voice: { inChannel: false },
+                timestamp: new Date() 
+            };
             this.lastStatus = status;
             return status;
         }
@@ -162,72 +167,45 @@ class DiscordService {
 
             let isActive = false;
             let activityType = null;
+            let voiceState = { inChannel: false };
 
             for (const guild of guilds.values()) {
                 try {
-                    this.logger.debug(`Checking guild: ${guild.name} (${guild.id})`);
-                    
                     const member = await guild.members.fetch(this.userId);
-                    this.logger.debug('Found member details: ' + JSON.stringify({
-                        id: member.id,
-                        displayName: member.displayName,
-                        presence: member.presence ? {
-                            status: member.presence.status,
-                            activities: member.presence.activities.map(a => ({
-                                type: a.type,
-                                name: a.name,
-                                streaming: !!a.streaming
-                            }))
-                        } : 'No presence data',
-                        voice: member.voice ? {
-                            inChannel: !!member.voice.channelId,
-                            channelName: member.voice.channel?.name,
-                            streaming: !!member.voice.streaming,
-                            selfVideo: !!member.voice.selfVideo
-                        } : 'Not in voice'
-                    }, null, 2));
                     
-                    const voiceState = member.voice;
-                    if (voiceState) {
-                        this.logger.debug('Voice state values: ' + JSON.stringify({
-                            inChannel: !!voiceState.channelId,
-                            channelName: voiceState.channel?.name,
-                            isStreaming: !!voiceState.streaming,
-                            hasCamera: !!voiceState.selfVideo,
-                            isMuted: !!voiceState.selfMute
-                        }, null, 2));
+                    if (member) {
+                        // Check voice state first
+                        if (member.voice?.channelId) {
+                            voiceState = {
+                                inChannel: true,
+                                channelId: member.voice.channelId,
+                                channelName: member.voice.channel?.name,
+                                streaming: !!member.voice.streaming,
+                                selfVideo: !!member.voice.selfVideo
+                            };
 
-                        if (voiceState.streaming) {
-                            isActive = true;
-                            activityType = 'screen_share';
-                            this.logger.debug('✓ Screen share detected');
+                            // Only set activity type if in a voice channel
+                            if (member.voice.streaming) {
+                                isActive = true;
+                                activityType = 'screen_share';
+                            }
+                            if (member.voice.selfVideo) {
+                                isActive = true;
+                                activityType = 'camera';
+                            }
                         }
-                        if (voiceState.selfVideo) {
-                            isActive = true;
-                            activityType = 'camera';
-                            this.logger.debug('✓ Camera detected, setting active status');
-                        }
-                    }
 
-                    if (member.presence) {
-                        this.logger.debug('Presence details: ' + JSON.stringify({
-                            status: member.presence.status,
-                            activities: member.presence.activities.map(a => ({
-                                type: a.type,
-                                name: a.name,
-                                state: a.state
-                            }))
-                        }, null, 2));
-
-                        const isStreaming = member.presence.activities?.some(
-                            activity => activity.type === 'STREAMING' ||
-                                      (activity.type === 'CUSTOM' && activity.streaming)
-                        );
-                        
-                        if (isStreaming) {
-                            isActive = true;
-                            activityType = 'streaming';
-                            this.logger.debug('✓ Streaming activity detected');
+                        // Only check for streaming activity if in a voice channel
+                        if (voiceState.inChannel && member.presence) {
+                            const isStreaming = member.presence.activities?.some(
+                                activity => activity.type === 'STREAMING' ||
+                                          (activity.type === 'CUSTOM' && activity.streaming)
+                            );
+                            
+                            if (isStreaming) {
+                                isActive = true;
+                                activityType = 'streaming';
+                            }
                         }
                     }
                 } catch (memberError) {
@@ -239,12 +217,14 @@ class DiscordService {
             const status = {
                 streaming: isActive,
                 activityType: activityType,
+                voice: voiceState,
                 timestamp: new Date()
             };
 
             this.logger.debug('Final status values: ' + JSON.stringify({
                 isActive,
                 activityType,
+                voiceState,
                 timestamp: new Date().toISOString()
             }, null, 2));
 
@@ -256,7 +236,12 @@ class DiscordService {
             this.logger.error(`Failed to get Discord status: ${error.message}`);
             this.logger.debug('Error stack: ' + error.stack);
             this.serviceStatus.updateStatus('discord', false, error.message);
-            return { streaming: false, activityType: null, timestamp: new Date() };
+            return { 
+                streaming: false, 
+                activityType: null, 
+                voice: { inChannel: false },
+                timestamp: new Date() 
+            };
         }
     }
 

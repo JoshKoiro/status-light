@@ -82,18 +82,24 @@ class StateManager {
         let color = 'off';
         let isOn = false;
 
-        if (discordStatus.activityType === 'camera' && process.env.DISCORD_CAMERA_ON) {
-            color = process.env.DISCORD_CAMERA_ON;
-            isOn = true;
-        } else if (['screen_share', 'streaming'].includes(discordStatus.activityType) && process.env.DISCORD_STREAMING) {
-            color = process.env.DISCORD_STREAMING;
-            isOn = true;
+        // First check if there's a voice state and if the user is in a channel
+        const isInVoiceChannel = discordStatus.voice?.inChannel;
+
+        // Only check for camera/streaming if user is actually in a voice channel
+        if (isInVoiceChannel) {
+            if (discordStatus.activityType === 'camera' && process.env.DISCORD_CAMERA_ON) {
+                color = process.env.DISCORD_CAMERA_ON;
+                isOn = true;
+            } else if (['screen_share', 'streaming'].includes(discordStatus.activityType) && process.env.DISCORD_STREAMING) {
+                color = process.env.DISCORD_STREAMING;
+                isOn = true;
+            }
         }
 
         return {
             isOn,
             color,
-            activityType: discordStatus.activityType
+            activityType: isInVoiceChannel ? discordStatus.activityType : null
         };
     }
 
