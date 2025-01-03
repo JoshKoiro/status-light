@@ -1,6 +1,7 @@
-version: '3.8'
 services:
   status-light:
+    container_name: status-light
+    image: status-light
     build: .
     environment:
       - NODE_ENV=production
